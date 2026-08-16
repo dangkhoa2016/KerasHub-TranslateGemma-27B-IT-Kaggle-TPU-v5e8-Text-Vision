@@ -1,0 +1,4 @@
+# CPU-only test dependencies. CI intentionally does not install JAX/Keras/KerasHub.
+Flask>=3.0,<4
+waitress>=3,<4
+Pillow>=10,<13
