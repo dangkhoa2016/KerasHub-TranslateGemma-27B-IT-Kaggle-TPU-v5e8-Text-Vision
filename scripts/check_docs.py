@@ -14,7 +14,6 @@ REQUIRED_EN_DOCS = [
     Path("CHANGELOG.md"),
     Path("CONTRIBUTING.md"),
     Path("SECURITY.md"),
-    Path("RELEASE_NOTES_v1.0.0.md"),
     Path("NOTICE.md"),
     Path("THIRD_PARTY_NOTICES.md"),
     Path("CODE_OF_CONDUCT.md"),
@@ -28,6 +27,13 @@ REQUIRED_EN_DOCS = [
     Path(".github/ISSUE_TEMPLATE/bug_report.md"),
     Path(".github/ISSUE_TEMPLATE/feature_request.md"),
 ]
+REQUIRED_EN_DOCS.extend(
+    sorted(
+        path.relative_to(ROOT)
+        for path in ROOT.glob("RELEASE_NOTES_v*.md")
+        if not path.name.endswith(".vi.md")
+    )
+)
 
 BANNED_PATTERNS = [
     re.compile(r"private[- ]v[1-5](?:\.\d+)*", re.IGNORECASE),
