@@ -39,9 +39,9 @@ class WorkerRestartContractTests(unittest.TestCase):
 
         self.assertTrue(restarted)
         self.assertFalse(manager._shutting_down.is_set())
-        self.assertTrue(manager._accepting)
+        self.assertFalse(manager._accepting)
         self.assertTrue(manager._restart_pending)
-        starter.assert_called_once_with()
+        starter.assert_called_once_with(restarting=True)
 
     def test_public_restart_path_never_reexecs_coordinator(self):
         root = Path(__file__).resolve().parents[1]
