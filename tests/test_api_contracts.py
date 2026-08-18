@@ -113,7 +113,7 @@ class ApiContractTests(unittest.TestCase):
         }
         payload = builder(health)
         encoded = json.dumps(payload)
-        self.assertEqual(payload["api_version"], "v1.0.0")
+        self.assertEqual(payload["api_version"], "1.0.0")
         self.assertEqual(payload["state"], "ready")
         self.assertIn("multipart", payload["capabilities"]["image_transports"])
         for forbidden in ("/secret/model/path", "secret traceback", '"pid"'):
@@ -290,5 +290,5 @@ class FlaskApiTests(unittest.TestCase):
         response = self.client.get("/info", headers=self.headers)
         self.assertEqual(response.status_code, 200)
         raw = response.get_data(as_text=True)
-        self.assertIn('"api_version":"v1.0.0"', raw)
+        self.assertIn('"api_version":"1.0.0"', raw)
         self.assertNotIn("/must/not/leak", raw)
