@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TranslateGemma27BPublicReleaseTests(unittest.TestCase):
-    def test_public_version_is_only_v1_0_0(self):
+    def test_public_version_is_only_1_0_0_with_v_prefixed_release_tag(self):
         package = (ROOT / "src/translategemma_server/__init__.py").read_text(encoding="utf-8")
-        self.assertIn('__version__ = "v1.0.0"', package)
+        self.assertIn('__version__ = "1.0.0"', package)
         public = []
         for path in ROOT.rglob("*"):
             if not path.is_file() or any(part in {".git", "__pycache__"} for part in path.parts):
@@ -23,7 +23,6 @@ class TranslateGemma27BPublicReleaseTests(unittest.TestCase):
         forbidden = re.compile(r"\bv(?:0|1|2|3|4|5|6|7|8|9)\.(?!0\.0\b)\d+(?:\.\d+)*(?:[-.]\w+)?", re.I)
         hits = [(str(p.relative_to(ROOT)), m.group(0)) for p, text in public for m in forbidden.finditer(text)]
         self.assertEqual(hits, [])
-
 
     def test_release_workflow_accepts_only_public_v1_0_0_tag(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -72,8 +71,6 @@ class TranslateGemma27BPublicReleaseTests(unittest.TestCase):
     def test_memory_guard_is_300_gib(self):
         env = (ROOT / ".env.example").read_text(encoding="utf-8")
         self.assertIn("MEMORY_GUARD_GIB=300", env)
-
-
 
     def test_engine_exposes_byte_weighted_sharding_telemetry(self):
         engine = (ROOT / "src/translategemma_server/tpu/engine.py").read_text(encoding="utf-8")
