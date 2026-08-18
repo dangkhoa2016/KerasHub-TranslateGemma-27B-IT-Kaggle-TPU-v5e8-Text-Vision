@@ -48,6 +48,7 @@ class TranslationManager:
         self._startup_thread = None
         self._load_watchdog_thread = None
         self._restart_pending = False
+        self._controlled_restart_generation: int | None = None
 
     def start_async(self) -> None:
         if self._startup_thread is not None:
@@ -67,9 +68,9 @@ class TranslationManager:
         )
         self._startup_thread.start()
 
-    def _start_worker(self) -> None:
+    def _start_worker(self, restarting: bool = False) -> None:
         self._generation += 1
-        self._restart_pending = False
+        self._restart_pending = restarting
         generation = self._generation
         worker_id = self.WORKER_ID
 
@@ -186,6 +187,9 @@ class TranslationManager:
                     state="ready",
                     metadata=message.get("metadata", {}),
                 )
+                self._restart_pending = False
+                if not self._shutting_down.is_set():
+                    self._accepting = True
             elif message_type == "worker_load_error":
                 status.update(
                     state="failed",
@@ -225,6 +229,9 @@ class TranslationManager:
             return
 
         with self._lock:
+            if self._controlled_restart_generation == generation:
+                return
+
             status = self._worker_status.get(self.WORKER_ID, {})
             current_generation = status.get("generation") == generation
             if not current_generation:
@@ -252,7 +259,7 @@ class TranslationManager:
             )
             time.sleep(1)
             if not self._shutting_down.is_set():
-                self._start_worker()
+                self._start_worker(restarting=True)
         else:
             with self._lock:
                 self._restart_pending = False
@@ -365,6 +372,49 @@ class TranslationManager:
                 return True
             time.sleep(0.2)
         return self.store.pending_count() == 0
+
+    def restart_worker(self, wait_for_jobs: bool, timeout: float) -> bool:
+        """Replace the TPU worker without stopping the HTTP coordinator."""
+        if self._shutting_down.is_set():
+            return False
+
+        with self._lock:
+            self._accepting = False
+            self._restart_pending = True
+            generation = self._generation
+            process = self._worker
+            old_monitor = self._monitor_thread
+            self._controlled_restart_generation = generation or None
+            status = self._worker_status.get(self.WORKER_ID)
+            if status and status.get("generation") == generation:
+                status["state"] = "restarting"
+                status.pop("active_job_id", None)
+
+        idle = self.wait_idle(timeout) if wait_for_jobs else True
+
+        if process and process.is_alive():
+            process.terminate()
+            process.join(timeout=min(max(timeout, 0.1), 30.0))
+        if process and process.is_alive():
+            killer = getattr(process, "kill", process.terminate)
+            killer()
+            process.join(timeout=5)
+        if process and process.is_alive():
+            raise RuntimeError("TPU worker did not stop during restart")
+
+        self.store.fail_active_for_worker(
+            self.WORKER_ID,
+            "TPU worker restarted",
+        )
+
+        if old_monitor and old_monitor is not threading.current_thread():
+            old_monitor.join(timeout=2)
+
+        with self._lock:
+            self._controlled_restart_generation = None
+
+        self._start_worker(restarting=True)
+        return idle
 
     def shutdown(self, wait_for_jobs: bool, timeout: float) -> bool:
         if self._shutting_down.is_set():
