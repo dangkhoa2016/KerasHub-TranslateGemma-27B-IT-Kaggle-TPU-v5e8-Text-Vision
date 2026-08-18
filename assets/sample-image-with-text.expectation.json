@@ -1,0 +1,37 @@
+{
+  "source_text": "HELLO, LITTLE FOX! WELCOME HOME.",
+  "required_concepts": [
+    {
+      "name": "greeting",
+      "any_of": [
+        "xin chào",
+        "chào"
+      ]
+    },
+    {
+      "name": "little_fox",
+      "any_of": [
+        "cáo nhỏ",
+        "cáo con"
+      ]
+    },
+    {
+      "name": "welcome_home",
+      "any_of": [
+        "mừng bạn về nhà",
+        "chào mừng bạn về nhà",
+        "mừng về nhà"
+      ]
+    }
+  ],
+  "forbidden_source_echo": [
+    "hello",
+    "little fox",
+    "welcome home"
+  ],
+  "known_confusions": [
+    "cú nhỏ",
+    "cú con",
+    "owl"
+  ]
+}
