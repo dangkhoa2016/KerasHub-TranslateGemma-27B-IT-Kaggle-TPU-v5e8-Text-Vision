@@ -1,3 +1,3 @@
 """TranslateGemma 27B IT Kaggle TPU REST server package."""
 
-__version__ = "v1.0.0"
+__version__ = "1.0.0"
