@@ -2,67 +2,54 @@
 
 > 🌐 Language / Ngôn ngữ: [English](RELEASE-EVIDENCE-v1.0.0.md) | **Tiếng Việt**
 
-## Mục đích
+## Phạm vi
 
-Tài liệu này ghi lại evidence Kaggle TPU v5e-8 thật dùng để publish public release đầu tiên `v1.0.0`. Public repository không expose lịch sử version phát triển private.
+Tài liệu này ghi real Kaggle TPU v5e-8 hardening evidence cho final publication candidate `v1.0.0` trước GitHub-only publication gate cuối cùng.
 
-## Runtime contract được khóa
+## Source và tests
 
-```text
-model                    translategemma_27b_it
-TPU devices              8
-logical model count      1
-TPU worker count         1
-mesh                     [1,8]
-axes                     [batch,model]
-dtype                    bfloat16
-checkpoint loading       strict
-generation               split_compile
-memory hard guard        300 GiB
-HTTP server              Waitress
-inference concurrency    1
-```
+- Base commit trước final integration: `1be6d5867ce3686103ef234cf99244b34a6be55d`.
+- Hardening TDD RED và GREEN phases PASS.
+- Full validated Kaggle suite: 149/149 tests PASS trước khi bổ sung release/tag overwrite hardening.
+- Runtime: TranslateGemma 27B IT, JAX, BF16, TPU v5e-8, 8 devices, mesh `[1,8]`.
 
-## End-to-end acceptance
+## Model và memory
 
-```text
-TPU ready                    PASS
-safe runtime info            PASS
-synchronous text             PASS
-long HTTP request             PASS
-direct image translation     PASS
-ALL-CAPS semantic correction PASS
-async submit/poll             PASS
-JIT cache reuse               PASS
-authenticated worker restart PASS
-replacement worker ready     PASS
-final health/memory gate      PASS
-```
+- Strict model weights: 1247/1247.
+- Logical parameter size: 51.884850 GiB.
+- Sharded parameter bytes: 95.05234%; unknown sharding bytes: 0%.
+- Peak cgroup memory: 206.049 GiB.
+- Memory guard: 300 GiB; measured headroom: 93.951 GiB.
 
-## Evidence checkpoint và sharding
+## Text acceptance
 
-Checkpoint đã validation expose `1247` model weights và `1247` trainable weights. Byte-weighted telemetry quan sát xấp xỉ `95.05234%` sharded parameter bytes, `4.94766%` replicated parameter bytes và `0%` unknown sharding bytes.
+- PRIME client time: 496.534 s; inference: 494.610 s; TTFT: 493.744 s.
+- PRIME compile: prefill 316.407 s + decode 177.338 s; cache reuse false.
+- HOT-1 client time: 0.207547 s; TTFT 0.035955 s; 67.81 tokens/s; cache reuse true.
+- HOT-2 client time: 0.207038 s; TTFT 0.034631 s; 69.02 tokens/s; cache reuse true.
+- Semantic result: PASS.
 
-## Runtime observations
+## Vision acceptance
 
-```text
-initial model load          686.861 s
-cold text client total      708.874 s
-cold text model total       708.749947 s
-cold image client total     519.628 s
-cold image model total      518.80455 s
-warm async client total     0.256 s
-warm async model total      0.158778 s
-replacement worker load     724.519 s
-final cgroup memory          63.318 GiB
-```
+- PRIME client time: 364.415 s; inference: 362.979 s; TTFT: 361.673 s.
+- PRIME compile: prefill 183.918 s + decode 177.755 s; cache reuse false.
+- HOT-1 client time: 0.581767 s; TTFT 0.140516 s; 70.95 tokens/s; cache reuse true.
+- HOT-2 client time: 0.579858 s; TTFT 0.140904 s; 71.19 tokens/s; cache reuse true.
+- Semantic result: PASS.
 
-Các số này là evidence từ một môi trường đã validation, không phải performance targets.
+## Stability
 
-## Safety evidence
+- Completed acceptance jobs: 6.
+- Failed jobs: 0.
+- Automatic worker restarts: 0.
+- Không quan sát OOM hoặc progressive HOT-request memory growth.
 
-Final safety gate không thấy `worker_failed`, `MemoryError`, tín hiệu out-of-memory, tín hiệu `Killed`, memory-guard breach artifact hay HTTP 500 bất thường. Warning startup TPU/JAX đã biết không tự động được coi là failure khi readiness và safety gates đều pass.
+## Artifact integrity
 
-## Quy tắc public release
+Sanitized evidence ZIP external SHA256 khớp, toàn bộ internal SHA256 entries khớp và runtime credential files đã được loại trừ.
 
-`v1.0.0` là project version public duy nhất được thể hiện trong repository này. Dependency versions, TPU hardware labels, protocol versions và file-format versions là technical identifiers độc lập, không phải project release versions.
+## Single-release overwrite gate
+
+Final publication chỉ giữ `v1.0.0`. Annotated remote tag hiện có phải giữ nguyên cho tới khi một Kaggle notebook mới import trực tiếp từ amended GitHub `main` PASS **Restart Session → Run All** và tạo fresh sanitized evidence.
+
+Sau PASS đó, tag chỉ được chuyển sang final `main` với exact `--force-with-lease` guard dựa trên remote tag object SHA đã ghi nhận trước đó, rồi GitHub Release `v1.0.0` hiện có và assets được refresh tại chỗ.

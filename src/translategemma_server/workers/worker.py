@@ -181,6 +181,9 @@ def model_worker_main(
             task = task_queue.get(timeout=0.5)
         except queue.Empty:
             continue
+        except KeyboardInterrupt:
+            logger.info("TPU worker %s received shutdown interrupt", worker_id)
+            break
 
         if task is None:
             break

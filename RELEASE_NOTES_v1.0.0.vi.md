@@ -4,93 +4,50 @@
 
 ## Tổng quan
 
-`v1.0.0` là stable release đầu tiên của REST server TranslateGemma 27B IT text + vision cho Kaggle TPU v5e-8.
+`v1.0.0` là public release đầu tiên và duy nhất trong publication cycle này của REST server TranslateGemma 27B IT text + vision cho Kaggle TPU v5e-8.
 
-Release đóng gói runtime TPU 8 thiết bị đã được validation, REST API có authentication, async job workflow, Python và Node.js clients, tài liệu song ngữ và Kaggle notebook ưu tiên import từ GitHub thành một release có thể tái lập.
-
-## Điểm nổi bật của release
-
-- TranslateGemma 27B IT được shard trên đúng 8 TPU devices với một logical worker.
-- ModelParallel mesh `[1,8]` với axes `[batch, model]`.
-- BF16 inference, strict checkpoint loading và generation `split_compile`.
-- Text và vision translation có authentication với cả synchronous và asynchronous endpoints.
-- Bounded job queue, readiness/liveness endpoints, runtime metadata và controlled TPU-worker restart.
-- Kaggle notebook được thiết kế cho fresh acceptance workflow **Restart Session → Run All**.
-- Cold compilation chạy lâu được xử lý bằng async submit + bounded polling thay vì giữ một client socket mở quá lâu.
+Final public snapshot kết hợp runtime TPU 8 thiết bị đã validation, REST API có authentication, async job workflow, PRIME/HOT semantic acceptance, sanitized evidence collection, tài liệu song ngữ và Kaggle notebook ưu tiên import từ GitHub mà không thay đổi TPU inference core đã khóa.
 
 ## Runtime contract đã validation
 
-```text
-Model                       TranslateGemma-27B-IT
-Backend                     JAX
-Framework                   Keras 3 + KerasHub
-Accelerator                 Kaggle TPU v5e-8 / v5litepod-8
-TPU devices                 8
-Logical workers             1
-Mesh                        [1,8]
-Mesh axes                   [batch, model]
-Dtype                       bfloat16
-Generation                  split_compile
-Strict weight loading       true
-Model weights               1247 / 1247
-Vision                      enabled
-Coordinator                 Waitress
-Server request timeout      900 seconds
-```
+- TranslateGemma 27B IT trên đúng 8 TPU devices với một logical worker.
+- Keras ModelParallel mesh `[1,8]`, BF16 inference, split-compile generation và strict weight loading 1247/1247.
+- Logical parameter size 51.884850 GiB; 95.05234% parameter bytes được shard; unknown sharding bytes 0%.
+- Peak cgroup memory 206.049 GiB, còn 93.951 GiB dưới memory guard 300 GiB.
+- Sáu acceptance jobs hoàn tất, không có failed job và không có automatic worker restart.
 
-Môi trường được chấp nhận dùng Python 3.12.x, Keras 3.15.1, KerasHub 0.31.0, JAX 0.10.2, jaxlib 0.10.2 và `libtpu` 0.0.17.
+## PRIME và HOT acceptance
 
-## End-to-end acceptance
+Text PRIME mất 496.534 giây client-side trong khi prefill/decode compilation tạo executable caches. Text HOT-1 và HOT-2 hoàn tất khoảng 0.207 giây client-side với cache reuse, TTFT khoảng 35 ms và khoảng 68–69 generated tokens/second.
 
-Release đã được validation trên Kaggle TPU thật với:
+Vision PRIME mất 364.415 giây client-side. Vision HOT-1 và HOT-2 hoàn tất khoảng 0.58 giây với cache reuse, TTFT khoảng 141 ms và khoảng 71 generated tokens/second.
 
-- fresh dependency/bootstrap checks;
-- đúng 8 TPU devices và mesh `[1,8]`;
-- strict 1247/1247 weight loading;
-- authenticated `/info` runtime inspection;
-- text translation hoàn tất;
-- vision translation hoàn tất;
-- async job progression `queued → processing → completed`;
-- controlled worker restart trong khi coordinator được giữ ổn định;
-- final shutdown sạch, không còn orphan managed TPU worker.
+Semantic validation PASS cho mọi kết quả PRIME/HOT text và vision. Evidence xác nhận first-shape JAX/XLA compilation, không phải warm decode runtime, là thành phần chi phối initial latency.
 
-Một fresh public-style Kaggle retest cũng xác nhận cold vision compile hợp lệ có thể mất khoảng 833 giây trước first token. Server và TPU worker vẫn khỏe mạnh và vision job hoàn tất thành công.
+## Hardening evidence và notebook
 
-## Hardening timeout khi cold compile
+- Text và vision smoke scripts chạy `PRIME → HOT-1 → HOT-2` semantic acceptance và giữ compile/cache/timing metrics.
+- Fresh Kaggle validation tái tạo `.env` từ `.env.example` theo cách deterministic.
+- Sanitized evidence được thu khi server vẫn còn khả dụng và gồm memory telemetry, acceptance JSON, source snapshots và checksums.
+- Runtime endpoint evidence ghi explicit unavailable marker thay vì âm thầm bỏ `/info` hoặc `/health` evidence.
+- Normal worker shutdown interruption được xử lý mà không tạo cosmetic `KeyboardInterrupt` traceback.
 
-Final snapshot `v1.0.0` loại bỏ mismatch giữa public notebook/client được phát hiện khi fresh acceptance testing.
+## Chính sách single-release publication
 
-High-level Python text và image translation giờ mặc định dùng async submission cùng `/result/<job_id>` polling. Public Kaggle notebook dùng path `scripts/test_vision.sh` đã được validation với per-request timeout 30 giây và overall polling window 1800 giây. Explicit synchronous client calls vẫn có sẵn qua `--sync` cho workload được chủ động giới hạn thời gian.
+Publication cycle này chủ ý chỉ public `v1.0.0`. Tag/release material `v1.0.0` trước đó là material validation trước publication và được refresh tại chỗ thay vì tạo version mới.
 
-Cách này ngăn một TPU job hợp lệ chạy lâu bị hiểu nhầm là model failure chỉ vì client socket hết hạn trước.
+Sau khi final `main` được amend và một Kaggle notebook mới import từ GitHub PASS **Restart Session → Run All**, annotated tag `v1.0.0` hiện có được chuyển sang final commit bằng lease-protected force update. Thao tác fail-closed nếu remote tag đã thay đổi sau khi expected old tag object SHA được ghi nhận.
+
+GitHub Release `v1.0.0` hiện có sau đó được edit tại chỗ và toàn bộ source/notebook assets được upload bằng `--clobber`. Publication cycle này không có successor release.
 
 ## Integrity của TPU engine đã khóa
 
-TPU inference core đã được chấp nhận vẫn không thay đổi:
-
-```text
-1a2658c55df2a204d59dc18960bd490e0231ef2c6d7582c406dc2b5a23fe1048  src/translategemma_server/tpu/engine.py
-e07b7ac54b600a5cbfdaede8c2daa534797bcb7bcea70dfcb8f19ab1b9ac8d13  src/translategemma_server/tpu/distribution.py
-4c5a17835d2f1d4601c28bd5bbd8781426f8ab63fa45c0893133a5285d1df5f8  src/translategemma_server/tpu/generation.py
-```
-
-## Bề mặt API
-
-Service cung cấp text/image translation có authentication, sync/async job endpoints, `/result/<job_id>` polling, health/readiness endpoints, `/info`, controlled restart, Python và Node.js clients cùng Cloudflare Quick Tunnel tùy chọn cho temporary remote access.
+TPU inference core đã chấp nhận không thay đổi: `engine.py`, `distribution.py` và `generation.py` giữ nguyên proven v1.0.0 engine behavior và checksums.
 
 ## Release artifacts
 
-GitHub Actions build và verify:
-
-- source archive;
-- Kaggle notebook artifact;
-- SHA256 và MD5 manifests cho cả hai;
-- Python và Bash syntax;
-- Node.js client syntax;
-- unit/contract tests;
-- bilingual documentation parity;
-- secret scanning và ZIP integrity.
+GitHub Actions verify unit/contract tests, documentation parity, syntax, secret scanning, source ZIP integrity và SHA256/MD5 manifests, sau đó refresh assets của release `v1.0.0` hiện có.
 
 ## Phạm vi
 
-Repository này là serving implementation hướng Kaggle. Model weights không được bundle. Temporary tunnel URLs không phải production infrastructure, và real TPU validation được tách khỏi CPU-friendly CI để bảo toàn accelerator quota.
+Model weights không được bundle. Temporary tunnel URLs không phải production infrastructure và real TPU validation vẫn tách khỏi CPU-friendly CI để bảo toàn accelerator quota.

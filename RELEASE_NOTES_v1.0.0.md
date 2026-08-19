@@ -4,93 +4,50 @@
 
 ## Overview
 
-`v1.0.0` is the first stable release of the TranslateGemma 27B IT text + vision REST server for Kaggle TPU v5e-8.
+`v1.0.0` is the first and only public release in this publication cycle of the TranslateGemma 27B IT text + vision REST server for Kaggle TPU v5e-8.
 
-It packages the validated 8-device TPU runtime, authenticated REST API, async job workflow, Python and Node.js clients, bilingual documentation, and a GitHub-import-first Kaggle notebook into one reproducible release.
-
-## Release highlights
-
-- TranslateGemma 27B IT sharded across exactly 8 TPU devices with one logical worker.
-- ModelParallel mesh `[1,8]` with axes `[batch, model]`.
-- BF16 inference, strict checkpoint loading, and `split_compile` generation.
-- Authenticated text and vision translation with synchronous and asynchronous endpoints.
-- Bounded job queue, readiness/liveness endpoints, runtime metadata, and controlled TPU-worker restart.
-- Kaggle notebook designed for a fresh **Restart Session → Run All** acceptance workflow.
-- Long-running cold compilation handled through async submit + bounded polling instead of one long-lived client socket.
+The final public snapshot combines the validated 8-device TPU runtime, authenticated REST API, async job workflow, PRIME/HOT semantic acceptance, sanitized evidence collection, bilingual documentation, and GitHub-import-first Kaggle notebook without changing the frozen TPU inference core.
 
 ## Validated runtime contract
 
-```text
-Model                       TranslateGemma-27B-IT
-Backend                     JAX
-Framework                   Keras 3 + KerasHub
-Accelerator                 Kaggle TPU v5e-8 / v5litepod-8
-TPU devices                 8
-Logical workers             1
-Mesh                        [1,8]
-Mesh axes                   [batch, model]
-Dtype                       bfloat16
-Generation                  split_compile
-Strict weight loading       true
-Model weights               1247 / 1247
-Vision                      enabled
-Coordinator                 Waitress
-Server request timeout      900 seconds
-```
+- TranslateGemma 27B IT on exactly 8 TPU devices with one logical worker.
+- Keras ModelParallel mesh `[1,8]`, BF16 inference, split-compile generation, and strict 1247/1247 weight loading.
+- Logical parameter size 51.884850 GiB; 95.05234% of parameter bytes sharded; unknown sharding bytes 0%.
+- Peak cgroup memory 206.049 GiB, leaving 93.951 GiB below the 300 GiB memory guard.
+- Six acceptance jobs completed, zero failed jobs, and zero automatic worker restarts.
 
-The accepted environment used Python 3.12.x, Keras 3.15.1, KerasHub 0.31.0, JAX 0.10.2, jaxlib 0.10.2, and `libtpu` 0.0.17.
+## PRIME and HOT acceptance
 
-## End-to-end acceptance
+Text PRIME took 496.534 seconds client-side while prefill/decode compilation populated executable caches. Text HOT-1 and HOT-2 completed in about 0.207 seconds client-side with cache reuse, TTFT around 35 ms, and about 68–69 generated tokens/second.
 
-The release was validated on real Kaggle TPU hardware with:
+Vision PRIME took 364.415 seconds client-side. Vision HOT-1 and HOT-2 completed in about 0.58 seconds with cache reuse, TTFT around 141 ms, and about 71 generated tokens/second.
 
-- fresh dependency/bootstrap checks;
-- exactly 8 TPU devices and mesh `[1,8]`;
-- strict 1247/1247 weight loading;
-- authenticated `/info` runtime inspection;
-- text translation completion;
-- vision translation completion;
-- async `queued → processing → completed` job progression;
-- controlled worker restart with coordinator continuity;
-- clean final shutdown without an orphan managed TPU worker.
+Semantic validation passed for every PRIME/HOT text and vision result. The evidence confirms that first-shape JAX/XLA compilation, rather than warm decode runtime, dominates initial latency.
 
-A fresh public-style Kaggle retest also confirmed that a cold vision compile can legitimately take about 833 seconds before the first token. The server and TPU worker remained healthy and the vision job completed successfully.
+## Evidence and notebook hardening
 
-## Cold-compile timeout hardening
+- Text and vision smoke scripts run `PRIME → HOT-1 → HOT-2` semantic acceptance and retain compile/cache/timing metrics.
+- Fresh Kaggle validation recreates `.env` from `.env.example` deterministically.
+- Sanitized evidence is collected while the server is still available and includes memory telemetry, acceptance JSON, source snapshots, and checksums.
+- Runtime endpoint evidence writes an explicit unavailable marker instead of silently omitting `/info` or `/health` evidence.
+- Normal worker shutdown interruption is handled without a cosmetic `KeyboardInterrupt` traceback.
 
-The final `v1.0.0` snapshot removes the public notebook/client mismatch discovered during fresh acceptance testing.
+## Single-release publication policy
 
-High-level Python text and image translation now use async submission plus `/result/<job_id>` polling by default. The public Kaggle notebook uses the already-validated `scripts/test_vision.sh` path with a 30-second per-request timeout and an 1800-second overall polling window. Explicit synchronous client calls remain available through `--sync` for intentionally bounded workloads.
+This publication cycle intentionally exposes only `v1.0.0`. Earlier `v1.0.0` tag/release material was pre-publication validation material and is refreshed in place rather than superseded by a new version.
 
-This prevents a valid long-running TPU job from being mistaken for a model failure simply because a client socket expired first.
+After the final `main` is amended and a fresh Kaggle notebook imported from GitHub passes **Restart Session → Run All**, the existing annotated `v1.0.0` tag is moved to that final commit with a lease-protected force update. The operation fails closed if the remote tag changed after the expected old tag object SHA was recorded.
+
+The existing GitHub Release `v1.0.0` is then edited in place and all source/notebook assets are uploaded with `--clobber`. No successor release is part of this publication cycle.
 
 ## Frozen TPU engine integrity
 
-The accepted TPU inference core remains unchanged:
-
-```text
-1a2658c55df2a204d59dc18960bd490e0231ef2c6d7582c406dc2b5a23fe1048  src/translategemma_server/tpu/engine.py
-e07b7ac54b600a5cbfdaede8c2daa534797bcb7bcea70dfcb8f19ab1b9ac8d13  src/translategemma_server/tpu/distribution.py
-4c5a17835d2f1d4601c28bd5bbd8781426f8ab63fa45c0893133a5285d1df5f8  src/translategemma_server/tpu/generation.py
-```
-
-## API surface
-
-The service exposes authenticated text and image translation, sync/async job endpoints, `/result/<job_id>` polling, health/readiness endpoints, `/info`, controlled restart, Python and Node.js clients, and an optional Cloudflare Quick Tunnel for temporary remote access.
+The accepted TPU inference core remains unchanged: `engine.py`, `distribution.py`, and `generation.py` retain the proven v1.0.0 engine behavior and checksums.
 
 ## Release artifacts
 
-GitHub Actions builds and verifies:
-
-- the source archive;
-- the Kaggle notebook artifact;
-- SHA256 and MD5 manifests for both;
-- Python and Bash syntax;
-- Node.js client syntax;
-- unit/contract tests;
-- bilingual documentation parity;
-- secret scanning and ZIP integrity.
+GitHub Actions verifies unit/contract tests, documentation parity, syntax, secret scanning, source ZIP integrity, and SHA256/MD5 manifests, then refreshes the existing `v1.0.0` release assets.
 
 ## Scope
 
-This repository is a Kaggle-oriented serving implementation. Model weights are not bundled. Temporary tunnel URLs are not production infrastructure, and real TPU validation is intentionally separated from CPU-friendly CI to preserve accelerator quota.
+Model weights are not bundled. Temporary tunnel URLs are not production infrastructure, and real TPU validation remains separate from CPU-friendly CI to preserve accelerator quota.

@@ -1,0 +1,28 @@
+{
+  "source_text": "Good morning! How are you?",
+  "required_concepts": [
+    {
+      "name": "morning_greeting",
+      "any_of": [
+        "chào buổi sáng",
+        "xin chào",
+        "buổi sáng tốt lành"
+      ]
+    },
+    {
+      "name": "wellbeing_question",
+      "any_of": [
+        "bạn khỏe không",
+        "khỏe không",
+        "bạn có khỏe",
+        "bạn thế nào",
+        "dạo này"
+      ]
+    }
+  ],
+  "forbidden_source_echo": [
+    "good morning",
+    "how are you"
+  ],
+  "known_confusions": []
+}

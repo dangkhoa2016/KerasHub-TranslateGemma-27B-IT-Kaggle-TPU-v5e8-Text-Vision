@@ -7,9 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TranslateGemma27BPublicReleaseTests(unittest.TestCase):
-    def test_public_version_is_only_1_0_0_with_v_prefixed_release_tag(self):
+    def test_current_public_version_is_v1_0_0_single_release(self):
         package = (ROOT / "src/translategemma_server/__init__.py").read_text(encoding="utf-8")
         self.assertIn('__version__ = "1.0.0"', package)
+        self.assertTrue((ROOT / "RELEASE_NOTES_v1.0.0.md").is_file())
+        self.assertTrue((ROOT / "RELEASE_NOTES_v1.0.0.vi.md").is_file())
+
+    def test_public_version_is_only_1_0_0_with_v_prefixed_release_tag(self):
         public = []
         for path in ROOT.rglob("*"):
             if not path.is_file() or any(part in {".git", "__pycache__"} for part in path.parts):
@@ -24,10 +28,11 @@ class TranslateGemma27BPublicReleaseTests(unittest.TestCase):
         hits = [(str(p.relative_to(ROOT)), m.group(0)) for p, text in public for m in forbidden.finditer(text)]
         self.assertEqual(hits, [])
 
-    def test_release_workflow_accepts_only_public_v1_0_0_tag(self):
+    def test_release_workflow_is_single_v100_tag_and_shared_contract(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn('"v1.0.0"', workflow)
-        self.assertNotIn('"v*"', workflow)
+        self.assertIn('- "v1.0.0"', workflow)
+        self.assertIn("scripts/release_contract.py", workflow)
+        self.assertNotIn('"v*.*.*"', workflow)
 
     def test_public_identity_is_27b(self):
         text = "\n".join(
