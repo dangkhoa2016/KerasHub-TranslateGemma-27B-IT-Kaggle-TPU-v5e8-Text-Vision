@@ -37,6 +37,7 @@ class TranslationManager:
 
         self._worker = None
         self._generation = 0
+        self._automatic_restarts_used = 0
         self._worker_status: dict[str, dict] = {}
         self._lock = threading.RLock()
         self._accepting = True
@@ -49,6 +50,34 @@ class TranslationManager:
         self._load_watchdog_thread = None
         self._restart_pending = False
         self._controlled_restart_generation: int | None = None
+
+    @staticmethod
+    def _dispose_queue(channel) -> None:
+        """Best-effort cleanup for an IPC queue that will never be reused."""
+        if channel is None:
+            return
+        try:
+            channel.close()
+        except (AttributeError, OSError, ValueError):
+            pass
+        try:
+            channel.cancel_join_thread()
+        except (AttributeError, OSError, ValueError):
+            pass
+
+    def _rotate_ipc_channels(self) -> None:
+        """Give every worker generation fresh queues.
+
+        A process that is terminated while blocked in multiprocessing.Queue can
+        leave the underlying pipe/feeder state unsafe for later processes.  A
+        replacement worker therefore always receives new task/result queues.
+        """
+        old_task_queue = self.task_queue
+        old_result_queue = self.result_queue
+        self.task_queue = self.ctx.Queue(maxsize=self.config.max_queue_size)
+        self.result_queue = self.ctx.Queue()
+        self._dispose_queue(old_task_queue)
+        self._dispose_queue(old_result_queue)
 
     def start_async(self) -> None:
         if self._startup_thread is not None:
@@ -114,8 +143,9 @@ class TranslationManager:
         )
         self._load_watchdog_thread.start()
 
-    def _can_restart_generation(self, generation: int) -> bool:
-        return (generation - 1) < self.config.max_worker_restarts
+    def _can_restart_generation(self, _generation: int) -> bool:
+        """Crash-restart budget is independent of public worker generation."""
+        return self._automatic_restarts_used < self.config.max_worker_restarts
 
     def _expire_worker_load(self, process, generation: int) -> bool:
         """Atomically fail a still-loading generation and terminate its process."""
@@ -161,8 +191,16 @@ class TranslationManager:
     def _collect(self) -> None:
         while not self._collector_stop.is_set():
             try:
+                # Read self.result_queue on every iteration so IPC rotation is
+                # picked up without replacing the coordinator-side collector.
                 message = self.result_queue.get(timeout=0.5)
             except queue.Empty:
+                continue
+            except (EOFError, OSError, ValueError):
+                # A queue can be closed while the collector is blocked on the
+                # old generation during an intentional IPC rotation.
+                if self._collector_stop.is_set():
+                    return
                 continue
             self._handle(message)
 
@@ -251,14 +289,24 @@ class TranslationManager:
         )
 
         if should_restart:
+            with self._lock:
+                self._automatic_restarts_used += 1
             logger.warning(
-                "TPU worker exited (code=%s); restarting (%s/%s)",
+                "TPU worker exited (code=%s); automatic restart %s/%s",
                 process.exitcode,
-                generation,
+                self._automatic_restarts_used,
                 self.config.max_worker_restarts,
+            )
+            # The dead worker may have left either multiprocessing queue in an
+            # unsafe state.  Fail any queued work explicitly, rotate IPC, then
+            # let clients retry against the replacement generation.
+            self.store.fail_pending(
+                "TPU worker restarted after failure",
+                f"worker exited code {process.exitcode}",
             )
             time.sleep(1)
             if not self._shutting_down.is_set():
+                self._rotate_ipc_channels()
                 self._start_worker(restarting=True)
         else:
             with self._lock:
@@ -350,6 +398,7 @@ class TranslationManager:
             "expected_workers": 1,
             "restart_pending": self._restart_pending,
             "worker_generation": self._generation,
+            "automatic_restarts_used": self._automatic_restarts_used,
             "worker_load_timeout_seconds": self.config.worker_load_timeout,
             "accepting_jobs": (
                 self._accepting and not self._shutting_down.is_set()
@@ -374,7 +423,7 @@ class TranslationManager:
         return self.store.pending_count() == 0
 
     def restart_worker(self, wait_for_jobs: bool, timeout: float) -> bool:
-        """Replace the TPU worker without stopping the HTTP coordinator."""
+        """Replace only the TPU worker while keeping the HTTP coordinator alive."""
         if self._shutting_down.is_set():
             return False
 
@@ -390,11 +439,28 @@ class TranslationManager:
                 status["state"] = "restarting"
                 status.pop("active_job_id", None)
 
-        idle = self.wait_idle(timeout) if wait_for_jobs else True
+        if wait_for_jobs:
+            idle = self.wait_idle(timeout)
+        else:
+            idle = self.store.pending_count() == 0
 
-        if process and process.is_alive():
-            process.terminate()
+        graceful_stop_requested = False
+        if process and process.is_alive() and idle:
+            try:
+                # The worker loop already treats None as a clean stop sentinel.
+                # Use that path before escalating to terminate/kill.
+                self.task_queue.put_nowait(None)
+                graceful_stop_requested = True
+            except (queue.Full, OSError, ValueError):
+                graceful_stop_requested = False
+
+        if process and process.is_alive() and graceful_stop_requested:
             process.join(timeout=min(max(timeout, 0.1), 30.0))
+
+        forced_stop = bool(process and process.is_alive())
+        if forced_stop:
+            process.terminate()
+            process.join(timeout=30.0)
         if process and process.is_alive():
             killer = getattr(process, "kill", process.terminate)
             killer()
@@ -402,10 +468,16 @@ class TranslationManager:
         if process and process.is_alive():
             raise RuntimeError("TPU worker did not stop during restart")
 
-        self.store.fail_active_for_worker(
-            self.WORKER_ID,
-            "TPU worker restarted",
-        )
+        if not idle:
+            self.store.fail_pending(
+                "TPU worker restarted",
+                "restart did not wait for all queued/processing jobs",
+            )
+        else:
+            self.store.fail_active_for_worker(
+                self.WORKER_ID,
+                "TPU worker restarted",
+            )
 
         if old_monitor and old_monitor is not threading.current_thread():
             old_monitor.join(timeout=2)
@@ -413,6 +485,15 @@ class TranslationManager:
         with self._lock:
             self._controlled_restart_generation = None
 
+        # Always rotate queues between generations.  This is required after a
+        # forced stop and also prevents stale sentinels/messages from leaking
+        # from an orderly old generation into its replacement.
+        self._rotate_ipc_channels()
+        logger.info(
+            "TPU worker generation %s stopped (%s); starting replacement",
+            generation,
+            "forced" if forced_stop else "graceful",
+        )
         self._start_worker(restarting=True)
         return idle
 
@@ -427,7 +508,7 @@ class TranslationManager:
 
         try:
             self.task_queue.put_nowait(None)
-        except queue.Full:
+        except (queue.Full, OSError, ValueError):
             pass
 
         process = self._worker
