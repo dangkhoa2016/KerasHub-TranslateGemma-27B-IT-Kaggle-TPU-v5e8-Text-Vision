@@ -17,6 +17,7 @@ JSON
 python3 scripts/api_smoke.py \
   --base-url "$(server_base_url)" \
   --api-key "$key" \
-  --path /translate \
+  --path /translate/async \
   --payload-file "$tmp" \
-  --timeout "${SMOKE_TIMEOUT:-1200}"
+  --timeout "${SMOKE_TIMEOUT:-1200}" \
+  --request-timeout "${SMOKE_REQUEST_TIMEOUT:-30}"

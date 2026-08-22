@@ -29,7 +29,7 @@ class ReleaseEvidenceTests(unittest.TestCase):
     def test_version_is_public_v1_0_0(self):
         sys.path.insert(0, str(ROOT / "src"))
         import translategemma_server
-        self.assertEqual(translategemma_server.__version__, "v1.0.0")
+        self.assertEqual(translategemma_server.__version__, "1.0.0")
 
     def test_frozen_tpu_engine_files_are_unchanged(self):
         import hashlib

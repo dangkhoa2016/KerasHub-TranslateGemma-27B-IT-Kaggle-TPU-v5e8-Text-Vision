@@ -22,7 +22,7 @@ class PublicDistributionTests(unittest.TestCase):
         import sys
         sys.path.insert(0, str(ROOT / "src"))
         import translategemma_server
-        self.assertEqual(translategemma_server.__version__, "v1.0.0")
+        self.assertEqual(translategemma_server.__version__, "1.0.0")
 
     def test_notebook_uses_stable_checkout_and_has_no_private_dev_cells(self):
         self.assertTrue(NOTEBOOK.exists())

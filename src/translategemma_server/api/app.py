@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import sys
 import threading
 import time
 import uuid
@@ -376,6 +375,7 @@ def create_app(runtime: Runtime):
         )
 
     @app.post("/restart")
+    @auth_required
     def restart():
         provided = request.headers.get("X-Restart-Secret", "").strip()
         if not provided or not hmac.compare_digest(
@@ -398,12 +398,9 @@ def create_app(runtime: Runtime):
         def do_restart() -> None:
             try:
                 time.sleep(0.2)
-                runtime.shutdown_started.set()
-                manager.shutdown(wait_for_jobs, timeout)
-                if runtime.server:
-                    runtime.server.shutdown()
-                    runtime.server.server_close()
-                os.execv(sys.executable, [sys.executable] + sys.argv)
+                manager.restart_worker(wait_for_jobs, timeout)
+            except Exception:
+                logger.exception("TPU worker restart failed")
             finally:
                 runtime.restart_lock.release()
 

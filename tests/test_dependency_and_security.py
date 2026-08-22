@@ -20,7 +20,7 @@ def load_module(path: Path, name: str):
 class VersionContractTests(unittest.TestCase):
     def test_package_version_is_public_v1_0_0(self):
         import translategemma_server
-        self.assertEqual(translategemma_server.__version__, "v1.0.0")
+        self.assertEqual(translategemma_server.__version__, "1.0.0")
 
     def test_info_payload_reports_public_v1_0_0(self):
         from translategemma_server.api.app import build_info_payload
@@ -35,7 +35,7 @@ class VersionContractTests(unittest.TestCase):
                 "mesh": [1, 8],
             },
         })
-        self.assertEqual(payload["api_version"], "v1.0.0")
+        self.assertEqual(payload["api_version"], "1.0.0")
 
 
 class DependencyHygieneTests(unittest.TestCase):

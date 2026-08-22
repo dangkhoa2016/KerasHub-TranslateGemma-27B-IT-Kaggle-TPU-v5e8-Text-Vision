@@ -30,7 +30,6 @@ class SetupContractTests(unittest.TestCase):
         self.assertIn("scripts/check_tpu_preflight.py", text)
         self.assertNotIn('import jax\nprint("JAX:"', text)
 
-
     def test_setup_bootstraps_missing_libtpu_without_replacing_jax(self):
         text = (ROOT / "scripts/setup.sh").read_text(encoding="utf-8")
         self.assertIn("scripts/ensure_libtpu.py", text)
@@ -116,7 +115,7 @@ class SetupContractTests(unittest.TestCase):
             text=True,
             check=True,
         )
-        self.assertEqual(proc.stdout.strip(), "v1.0.0")
+        self.assertEqual(proc.stdout.strip(), "1.0.0")
 
 
 if __name__ == "__main__":
