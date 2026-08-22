@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
+import signal
 
 from waitress import serve
 
@@ -17,6 +18,29 @@ from translategemma_server.core.paths import LOG_DIR, configure_logging
 from translategemma_server.workers.manager import TranslationManager
 
 logger = logging.getLogger("translategemma_server")
+
+
+class CoordinatorShutdown(BaseException):
+    def __init__(self, signum: int) -> None:
+        self.signum = signum
+        super().__init__(f"shutdown signal {signum}")
+
+
+def _shutdown_signal(signum, _frame) -> None:
+    raise CoordinatorShutdown(signum)
+
+
+def _install_shutdown_signals() -> dict[int, object]:
+    previous = {}
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, _shutdown_signal)
+    return previous
+
+
+def _restore_shutdown_signals(previous: dict[int, object]) -> None:
+    for signum, handler in previous.items():
+        signal.signal(signum, handler)
 
 
 def main() -> int:
@@ -31,8 +55,9 @@ def main() -> int:
     manager = TranslationManager(config)
     runtime = Runtime(config, manager)
     app = create_app(runtime)
-    manager.start_async()
+    previous_signals = _install_shutdown_signals()
     try:
+        manager.start_async()
         serve(
             app,
             host=config.host,
@@ -40,8 +65,11 @@ def main() -> int:
             threads=max(4, config.max_queue_size + 3),
             channel_timeout=max(120, int(config.request_timeout) + 60),
         )
+    except CoordinatorShutdown as exc:
+        logger.info("Coordinator received shutdown signal %s", exc.signum)
     finally:
-        manager.shutdown(False, 30)
+        _restore_shutdown_signals(previous_signals)
+        manager.shutdown(False, config.shutdown_timeout)
     return 0
 
 

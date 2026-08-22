@@ -5,9 +5,14 @@ load_env
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/configure_kaggle_tpu.sh"
 pid_file="$ROOT_DIR/state/server.pid"
+worker_pid_file="$ROOT_DIR/state/worker.pid"
 if pid="$(read_managed_pid "$pid_file" "src/server.py" 2>/dev/null)"; then
   echo "Server already running (PID $pid)."
   exit 0
+fi
+if worker_pid="$(read_managed_pid "$worker_pid_file" "multiprocessing.spawn" 2>/dev/null)"; then
+  echo "Refusing to start: managed TPU worker PID $worker_pid is still alive. Run scripts/stop.sh first." >&2
+  exit 1
 fi
 export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 archive_dir="$ROOT_DIR/log/archive"

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -19,6 +20,7 @@ def submit_and_wait(
     *,
     timeout: float,
     poll_interval: float,
+    progress_fn: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     status, data = request_fn("POST", path, payload)
     if status != 202:
@@ -28,12 +30,30 @@ def submit_and_wait(
     if not job_id:
         return status, data
 
+    last_job_status = None
+
+    def report(current_status: int, current_data: dict[str, Any]) -> None:
+        nonlocal last_job_status
+        if progress_fn is None:
+            return
+        job_status = str(current_data.get("status") or f"http-{current_status}")
+        if job_status == last_job_status:
+            return
+        last_job_status = job_status
+        progress_fn({
+            "job_id": job_id,
+            "status": job_status,
+            "http_status": current_status,
+        })
+
+    report(status, data)
     deadline = time.monotonic() + timeout
     result_path = f"/result/{job_id}"
     while time.monotonic() < deadline:
         if poll_interval:
             time.sleep(poll_interval)
         status, data = request_fn("GET", result_path, None)
+        report(status, data)
         if status != 202:
             return status, data
     raise TimeoutError(f"Job {job_id} did not finish within {timeout:g}s")
@@ -91,6 +111,17 @@ def main() -> int:
         args.api_key,
         args.request_timeout,
     )
+    started = time.monotonic()
+
+    def report_progress(event: dict[str, Any]) -> None:
+        output = dict(event)
+        output["elapsed_seconds"] = round(time.monotonic() - started, 3)
+        print(
+            json.dumps({"smoke_progress": output}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
     try:
         status, data = submit_and_wait(
             requester,
@@ -98,6 +129,7 @@ def main() -> int:
             payload,
             timeout=args.timeout,
             poll_interval=args.poll_interval,
+            progress_fn=report_progress,
         )
     except TimeoutError as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))

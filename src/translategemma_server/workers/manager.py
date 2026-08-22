@@ -6,6 +6,7 @@ import queue
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from ..core.errors import (
     QueueFullError,
@@ -14,6 +15,7 @@ from ..core.errors import (
 )
 from ..jobs.models import Job
 from ..jobs.store import JobStore
+from ..core.paths import STATE_DIR
 from .worker import model_worker_main
 
 logger = logging.getLogger("translategemma_server")
@@ -63,6 +65,35 @@ class TranslationManager:
         try:
             channel.cancel_join_thread()
         except (AttributeError, OSError, ValueError):
+            pass
+
+    @property
+    def worker_pid_file(self) -> Path:
+        return STATE_DIR / "worker.pid"
+
+    def _write_worker_pid(self, process) -> None:
+        pid = getattr(process, "pid", None)
+        if not pid:
+            return
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = self.worker_pid_file.with_suffix(".pid.tmp")
+        tmp.write_text(f"{pid}\n", encoding="utf-8")
+        tmp.replace(self.worker_pid_file)
+
+    def _clear_worker_pid(self, expected_pid: int | None = None) -> None:
+        path = self.worker_pid_file
+        if not path.exists():
+            return
+        if expected_pid is not None:
+            try:
+                current = int(path.read_text(encoding="utf-8").strip())
+            except (OSError, ValueError):
+                current = None
+            if current is not None and current != expected_pid:
+                return
+        try:
+            path.unlink()
+        except FileNotFoundError:
             pass
 
     def _rotate_ipc_channels(self) -> None:
@@ -126,6 +157,21 @@ class TranslationManager:
         )
         process.start()
         self._worker = process
+        try:
+            self._write_worker_pid(process)
+        except Exception:
+            logger.exception("Failed to persist TPU worker PID; stopping untracked worker")
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+            if process.is_alive():
+                killer = getattr(process, "kill", process.terminate)
+                killer()
+                process.join(timeout=5)
+            self._worker = None
+            raise
+        with self._lock:
+            self._worker_status[worker_id]["pid"] = process.pid
 
         self._monitor_thread = threading.Thread(
             target=self._monitor,
@@ -263,6 +309,7 @@ class TranslationManager:
 
     def _monitor(self, process, generation: int) -> None:
         process.join()
+        self._clear_worker_pid(getattr(process, "pid", None))
         if self._shutting_down.is_set():
             return
 
@@ -467,6 +514,8 @@ class TranslationManager:
             process.join(timeout=5)
         if process and process.is_alive():
             raise RuntimeError("TPU worker did not stop during restart")
+        if process:
+            self._clear_worker_pid(getattr(process, "pid", None))
 
         if not idle:
             self.store.fail_pending(
@@ -499,7 +548,11 @@ class TranslationManager:
 
     def shutdown(self, wait_for_jobs: bool, timeout: float) -> bool:
         if self._shutting_down.is_set():
-            return self.store.pending_count() == 0
+            process = self._worker
+            return (
+                self.store.pending_count() == 0
+                and not (process and process.is_alive())
+            )
 
         self._shutting_down.set()
         self._accepting = False
@@ -512,13 +565,24 @@ class TranslationManager:
             pass
 
         process = self._worker
+        process_pid = getattr(process, "pid", None) if process else None
         if process and process.is_alive():
-            process.join(timeout=min(timeout, 30))
+            process.join(timeout=min(max(timeout, 0.1), 30.0))
         if process and process.is_alive():
             process.terminate()
             process.join(timeout=5)
+        if process and process.is_alive():
+            killer = getattr(process, "kill", process.terminate)
+            killer()
+            process.join(timeout=5)
+        if process and process.is_alive():
+            raise RuntimeError("TPU worker did not stop during server shutdown")
 
+        self._clear_worker_pid(process_pid)
+        self._worker = None
         self._collector_stop.set()
+        self._dispose_queue(self.task_queue)
+        self._dispose_queue(self.result_queue)
         if self._collector_thread:
             self._collector_thread.join(timeout=2)
         return idle
