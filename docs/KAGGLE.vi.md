@@ -38,9 +38,17 @@ Notebook:
 7. chờ mesh `[1,8]` ready;
 8. query authenticated runtime information;
 9. chạy text translation;
-10. chạy multipart vision translation;
+10. chạy vision smoke qua `/translate/image/async` với HTTP request ngắn và result polling dài;
 11. tùy chọn start Cloudflare Quick Tunnel;
 12. in final service status.
+
+## Request TPU chạy lâu
+
+Cold compilation của TranslateGemma 27B có thể kéo dài nhiều phút. Không nên giữ một client socket mở trong toàn bộ thời gian compile khi đã có async endpoint.
+
+Public notebook dùng `scripts/test_vision.sh`, submit vào `/translate/image/async`, dùng per-request timeout ngắn và poll `/result/<job_id>` cho đến khi overall smoke timeout hết hạn. Notebook validation mặc định cho phép tối đa 1800 giây tổng thể nhưng mỗi HTTP request chỉ tối đa 30 giây.
+
+Python client cũng mặc định theo cùng contract an toàn hơn cho high-level text và image translation. Chỉ dùng `--sync` khi bạn chủ động muốn synchronous endpoint và đã chọn `--timeout` phù hợp.
 
 ## Chế độ chỉ CPU/source
 
@@ -65,7 +73,7 @@ bash scripts/start.sh
 
 ## Thứ tự troubleshooting
 
-Nếu run fail, trước hết xác định failure xảy ra trong Git/source checks, dependency/bootstrap, TPU preflight, model loading hay REST/inference. Tránh thay TPU engine cho failure xảy ra trước model initialization.
+Nếu run fail, trước hết xác định failure xảy ra trong Git/source checks, dependency/bootstrap, TPU preflight, model loading hay REST/inference. Client-side socket timeout tự nó không chứng minh TPU worker đã fail: hãy kiểm tra `scripts/status.sh` và job state trước khi thay runtime code. Tránh thay TPU engine cho failure xảy ra trước model initialization hoặc chỉ nằm ở client orchestration.
 
 ## TPU quota
 

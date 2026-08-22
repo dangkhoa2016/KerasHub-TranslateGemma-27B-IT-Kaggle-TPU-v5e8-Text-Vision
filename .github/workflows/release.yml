@@ -22,7 +22,7 @@ jobs:
         run: |
           bash scripts/test_unit.sh
           python scripts/check_docs.py
-          python -m compileall -q src scripts tests
+          python -m compileall -q src scripts tests clients/python
           find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           node --check clients/node/translategemma-client.mjs
           python scripts/secret_scan.py .
@@ -45,11 +45,29 @@ jobs:
         with:
           name: source-and-kaggle-notebook-${{ github.ref_name }}
           path: dist/*
-      - name: Create GitHub release
+      - name: Create or refresh GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --verify-tag \
-            --title "TranslateGemma 27B ${GITHUB_REF_NAME}" \
-            --generate-notes
+          set -euo pipefail
+          title="TranslateGemma 27B IT ${GITHUB_REF_NAME} — Kaggle TPU v5e-8 Text + Vision"
+          notes="RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+
+          if [[ ! -f "$notes" ]]; then
+            echo "Missing release notes: $notes" >&2
+            exit 1
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "$title" \
+              --notes-file "$notes"
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --title "$title" \
+              --notes-file "$notes"
+          fi

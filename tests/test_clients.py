@@ -37,7 +37,7 @@ class ClientContractTests(unittest.TestCase):
         client._request = fake_request
         result = client.translate_text("Hi", "English", "Vietnamese")
         self.assertEqual(result["translation"], "Xin chao")
-        self.assertEqual(calls, [("POST", "/translate"), ("GET", "/result/job-1")])
+        self.assertEqual(calls, [("POST", "/translate/async"), ("GET", "/result/job-1")])
 
     def test_python_multipart_encoder_contains_fields_and_file(self):
         root = Path(__file__).resolve().parents[1]

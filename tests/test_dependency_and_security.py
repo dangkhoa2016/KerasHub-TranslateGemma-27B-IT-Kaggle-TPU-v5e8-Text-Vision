@@ -124,7 +124,9 @@ class NotebookContractTests(unittest.TestCase):
         self.assertIn("git -C \"$ROOT\" reset --hard origin/main", code)
         self.assertIn("scripts/setup.sh", code)
         self.assertIn("scripts/wait_ready.py", code)
-        self.assertIn("--multipart", code)
+        self.assertIn("scripts/test_vision.sh", code)
+        self.assertIn("SMOKE_REQUEST_TIMEOUT", code)
+        self.assertIn("SMOKE_TIMEOUT", code)
         for forbidden in ("private_dev", ".kaggle-ssh", "NGROK_AUTHTOKEN", "SSH_PUBLIC_KEY", "package_full_backup.py", "restore-private.sh"):
             self.assertNotIn(forbidden, code)
         self.assertNotIn("import jax", code)

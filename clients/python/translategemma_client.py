@@ -64,6 +64,7 @@ class TranslateGemmaClient:
         api_key: str | None = None,
         api_key_file: str | Path | None = None,
         timeout: float = 620.0,
+        request_timeout: float = 30.0,
         poll_interval: float = 2.0,
         poll_timeout: float = 1800.0,
         request_id: str | None = None,
@@ -71,6 +72,7 @@ class TranslateGemmaClient:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key or self._read_api_key(api_key_file)
         self.timeout = timeout
+        self.request_timeout = request_timeout
         self.poll_interval = poll_interval
         self.poll_timeout = poll_timeout
         self.request_id = request_id
@@ -116,10 +118,15 @@ class TranslateGemmaClient:
             headers=req_headers,
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=self.timeout if timeout is None else timeout,
+            ) as response:
                 raw = response.read().decode("utf-8")
                 payload = json.loads(raw) if raw else {}
-                response_headers = {key.lower(): value for key, value in response.headers.items()}
+                response_headers = {
+                    key.lower(): value for key, value in response.headers.items()
+                }
                 return response.status, payload, response_headers
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
@@ -130,23 +137,14 @@ class TranslateGemmaClient:
             response_headers = {key.lower(): value for key, value in exc.headers.items()}
             return exc.code, payload, response_headers
 
-    def _submit_and_wait(self, path: str, request_kwargs: dict) -> dict:
-        status, payload, _headers = self._request("POST", path, **request_kwargs)
-        if status not in {200, 202}:
-            raise TranslateGemmaClientError(status, payload)
-        if status == 200:
-            return payload
-
-        result_url = payload.get("result_url")
-        job_id = payload.get("job_id")
-        if not result_url and job_id:
-            result_url = f"/result/{job_id}"
-        if not result_url:
-            raise TranslateGemmaClientError(202, {"error": "202 response has no result URL"})
-
+    def _poll_result(self, result_url: str) -> dict:
         deadline = time.monotonic() + self.poll_timeout
         while time.monotonic() < deadline:
-            status, result, _headers = self._request("GET", result_url)
+            status, result, _headers = self._request(
+                "GET",
+                result_url,
+                timeout=self.request_timeout,
+            )
             if status == 200:
                 return result
             if status != 202:
@@ -154,56 +152,64 @@ class TranslateGemmaClient:
             time.sleep(self.poll_interval)
         raise TimeoutError(f"Timed out waiting for {result_url}")
 
-    def translate_text(
-        self,
-        text: str,
-        source_lang: str,
-        target_lang: str,
-        *,
-        max_new_tokens: int = 256,
-    ) -> dict:
-        return self._submit_and_wait(
-            "/translate",
-            {
-                "json_body": {
-                    "text": text,
-                    "source_lang": source_lang,
-                    "target_lang": target_lang,
-                    "max_new_tokens": max_new_tokens,
-                }
-            },
-        )
+    @staticmethod
+    def _result_url(payload: dict) -> str:
+        result_url = payload.get("result_url")
+        job_id = payload.get("job_id")
+        if not result_url and job_id:
+            result_url = f"/result/{job_id}"
+        if not result_url:
+            raise TranslateGemmaClientError(
+                202,
+                {"error": "202 response has no result URL"},
+            )
+        return result_url
 
-    def translate_text_async(
-        self,
-        text: str,
-        source_lang: str,
-        target_lang: str,
-        *,
-        max_new_tokens: int = 256,
-    ) -> dict:
+    def _submit_and_wait(self, path: str, request_kwargs: dict) -> dict:
+        status, payload, _headers = self._request("POST", path, **request_kwargs)
+        if status not in {200, 202}:
+            raise TranslateGemmaClientError(status, payload)
+        if status == 200:
+            return payload
+        return self._poll_result(self._result_url(payload))
+
+    def _submit_async(self, path: str, request_kwargs: dict) -> dict:
         status, payload, _headers = self._request(
             "POST",
-            "/translate/async",
-            json_body={
-                "text": text,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "max_new_tokens": max_new_tokens,
-            },
+            path,
+            timeout=self.request_timeout,
+            **request_kwargs,
         )
         if status != 202:
             raise TranslateGemmaClientError(status, payload)
+        self._result_url(payload)
         return payload
 
-    def translate_image(
-        self,
+    def _submit_async_and_wait(self, path: str, request_kwargs: dict) -> dict:
+        payload = self._submit_async(path, request_kwargs)
+        return self._poll_result(self._result_url(payload))
+
+    @staticmethod
+    def _text_payload(
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        max_new_tokens: int,
+    ) -> dict:
+        return {
+            "text": text,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "max_new_tokens": max_new_tokens,
+        }
+
+    @staticmethod
+    def _image_request(
         image_path: str | Path,
         source_lang: str,
         target_lang: str,
-        *,
-        max_new_tokens: int = 256,
-        multipart: bool = True,
+        max_new_tokens: int,
+        multipart: bool,
     ) -> dict:
         path = Path(image_path)
         data = path.read_bytes()
@@ -220,25 +226,146 @@ class TranslateGemmaClient:
                 data,
                 content_type,
             )
-            return self._submit_and_wait(
-                "/translate/image",
-                {"body": body, "headers": {"Content-Type": multipart_type}},
-            )
+            return {"body": body, "headers": {"Content-Type": multipart_type}}
+        return {
+            "json_body": {
+                "image_base64": base64.b64encode(data).decode("ascii"),
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "max_new_tokens": max_new_tokens,
+            }
+        }
 
-        return self._submit_and_wait(
-            "/translate/image",
+    def translate_text(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+    ) -> dict:
+        """Translate text through the async endpoint and wait by polling."""
+        return self._submit_async_and_wait(
+            "/translate/async",
             {
-                "json_body": {
-                    "image_base64": base64.b64encode(data).decode("ascii"),
-                    "source_lang": source_lang,
-                    "target_lang": target_lang,
-                    "max_new_tokens": max_new_tokens,
-                }
+                "json_body": self._text_payload(
+                    text,
+                    source_lang,
+                    target_lang,
+                    max_new_tokens,
+                )
             },
         )
 
+    def translate_text_sync(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+    ) -> dict:
+        """Use the synchronous endpoint. Long cold compiles may hold the socket."""
+        return self._submit_and_wait(
+            "/translate",
+            {
+                "json_body": self._text_payload(
+                    text,
+                    source_lang,
+                    target_lang,
+                    max_new_tokens,
+                )
+            },
+        )
+
+    def translate_text_async(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+    ) -> dict:
+        return self._submit_async(
+            "/translate/async",
+            {
+                "json_body": self._text_payload(
+                    text,
+                    source_lang,
+                    target_lang,
+                    max_new_tokens,
+                )
+            },
+        )
+
+    def translate_image(
+        self,
+        image_path: str | Path,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+        multipart: bool = True,
+    ) -> dict:
+        """Translate an image through the async endpoint and wait by polling."""
+        return self._submit_async_and_wait(
+            "/translate/image/async",
+            self._image_request(
+                image_path,
+                source_lang,
+                target_lang,
+                max_new_tokens,
+                multipart,
+            ),
+        )
+
+    def translate_image_sync(
+        self,
+        image_path: str | Path,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+        multipart: bool = True,
+    ) -> dict:
+        """Use the synchronous image endpoint for explicitly bounded workloads."""
+        return self._submit_and_wait(
+            "/translate/image",
+            self._image_request(
+                image_path,
+                source_lang,
+                target_lang,
+                max_new_tokens,
+                multipart,
+            ),
+        )
+
+    def translate_image_async(
+        self,
+        image_path: str | Path,
+        source_lang: str,
+        target_lang: str,
+        *,
+        max_new_tokens: int = 256,
+        multipart: bool = True,
+    ) -> dict:
+        return self._submit_async(
+            "/translate/image/async",
+            self._image_request(
+                image_path,
+                source_lang,
+                target_lang,
+                max_new_tokens,
+                multipart,
+            ),
+        )
+
     def info(self) -> dict:
-        status, payload, _headers = self._request("GET", "/info")
+        status, payload, _headers = self._request(
+            "GET",
+            "/info",
+            timeout=self.request_timeout,
+        )
         if status != 200:
             raise TranslateGemmaClientError(status, payload)
         return payload
@@ -249,12 +376,26 @@ def _common_client_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--api-key")
     parser.add_argument("--api-key-file")
     parser.add_argument("--request-id")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=620.0,
+        help="Socket timeout for explicitly synchronous endpoint calls (seconds).",
+    )
+    parser.add_argument(
+        "--request-timeout",
+        type=float,
+        default=30.0,
+        help="Per-request timeout for async submit and result polling (seconds).",
+    )
     parser.add_argument("--poll-interval", type=float, default=2.0)
     parser.add_argument("--poll-timeout", type=float, default=1800.0)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Dependency-free TranslateGemma 27B REST client")
+    parser = argparse.ArgumentParser(
+        description="Dependency-free TranslateGemma 27B REST client"
+    )
     _common_client_args(parser)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -263,6 +404,11 @@ def main() -> int:
     text.add_argument("--source-lang", default="English")
     text.add_argument("--target-lang", default="Vietnamese")
     text.add_argument("--max-new-tokens", type=int, default=256)
+    text.add_argument(
+        "--sync",
+        action="store_true",
+        help="Use /translate instead of the default async submit + polling flow.",
+    )
 
     image = sub.add_parser("image")
     image.add_argument("image")
@@ -271,6 +417,11 @@ def main() -> int:
     image.add_argument("--max-new-tokens", type=int, default=256)
     image.add_argument("--multipart", action="store_true", default=True)
     image.add_argument("--json-base64", action="store_true")
+    image.add_argument(
+        "--sync",
+        action="store_true",
+        help="Use /translate/image instead of the default async submit + polling flow.",
+    )
 
     sub.add_parser("info")
     args = parser.parse_args()
@@ -278,19 +429,23 @@ def main() -> int:
         args.base_url,
         api_key=args.api_key,
         api_key_file=args.api_key_file,
+        timeout=args.timeout,
+        request_timeout=args.request_timeout,
         poll_interval=args.poll_interval,
         poll_timeout=args.poll_timeout,
         request_id=args.request_id,
     )
     if args.command == "text":
-        result = client.translate_text(
+        method = client.translate_text_sync if args.sync else client.translate_text
+        result = method(
             args.text,
             args.source_lang,
             args.target_lang,
             max_new_tokens=args.max_new_tokens,
         )
     elif args.command == "image":
-        result = client.translate_image(
+        method = client.translate_image_sync if args.sync else client.translate_image
+        result = method(
             args.image,
             args.source_lang,
             args.target_lang,

@@ -38,9 +38,17 @@ The notebook:
 7. waits for mesh `[1,8]` readiness;
 8. queries authenticated runtime information;
 9. runs text translation;
-10. runs multipart vision translation;
+10. runs the vision smoke through `/translate/image/async` with short HTTP requests and long result polling;
 11. optionally starts a Cloudflare Quick Tunnel;
 12. prints final service status.
+
+## Long-running TPU requests
+
+Cold compilation for TranslateGemma 27B can take many minutes. Do not keep one client socket open for the entire compile when an async endpoint is available.
+
+The public notebook uses `scripts/test_vision.sh`, which submits to `/translate/image/async`, uses a short per-request timeout, and polls `/result/<job_id>` until the overall smoke timeout expires. The default notebook validation allows up to 1800 seconds overall while keeping each HTTP request bounded to 30 seconds.
+
+The Python client follows the same safer contract by default for high-level text and image translation. Use `--sync` only when you intentionally want the synchronous endpoint and have selected an appropriate `--timeout`.
 
 ## CPU/source-only mode
 
@@ -65,7 +73,7 @@ bash scripts/start.sh
 
 ## Troubleshooting order
 
-If a run fails, first identify whether the failure happened during Git/source checks, dependency/bootstrap, TPU preflight, model loading, or REST/inference. Avoid changing the TPU engine for failures that occur before model initialization.
+If a run fails, first identify whether the failure happened during Git/source checks, dependency/bootstrap, TPU preflight, model loading, or REST/inference. A client-side socket timeout does not by itself prove the TPU worker failed: inspect `scripts/status.sh` and the job state before changing runtime code. Avoid changing the TPU engine for failures that occur before model initialization or only in client orchestration.
 
 ## TPU quota
 

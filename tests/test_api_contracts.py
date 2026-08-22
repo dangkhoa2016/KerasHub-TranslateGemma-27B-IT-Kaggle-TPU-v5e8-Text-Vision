@@ -148,8 +148,11 @@ class TunnelAndNotebookContractTests(unittest.TestCase):
         for forbidden in ("import jax", "import keras", "import keras_hub"):
             self.assertNotIn(forbidden, code)
         self.assertIn("scripts/wait_ready.py", code)
-        self.assertIn("/info", code)
-        self.assertIn("--multipart", code)
+        self.assertIn("clients/python/translategemma_client.py", code)
+        self.assertIn('"info"', code)
+        self.assertIn("scripts/test_vision.sh", code)
+        self.assertIn("SMOKE_REQUEST_TIMEOUT", code)
+        self.assertIn("SMOKE_TIMEOUT", code)
 
 
 class EngineIntegrityTests(unittest.TestCase):
