@@ -4,37 +4,47 @@
 
 ## Phạm vi
 
-Tài liệu này ghi real Kaggle TPU v5e-8 hardening evidence cho final publication candidate `v1.0.0` trước GitHub-only publication gate cuối cùng.
+Tài liệu này là final release evidence record bất biến cho public release `v1.0.0` của REST server TranslateGemma 27B IT text + vision cho Kaggle TPU v5e-8. Nó thay thế toàn bộ tài liệu evidence candidate/trước-publication.
 
-## Source và tests
+## Danh tính release đã validation
 
-- Base commit trước final integration: `1be6d5867ce3686103ef234cf99244b34a6be55d`.
-- Hardening TDD RED và GREEN phases PASS.
-- Full validated Kaggle suite: 149/149 tests PASS trước khi bổ sung release/tag overwrite hardening.
-- Runtime: TranslateGemma 27B IT, JAX, BF16, TPU v5e-8, 8 devices, mesh `[1,8]`.
+- Validated release commit: `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`
+- Validated release tree: `56320fdd6cede00589c363912513190ed3d4be08`
+- Annotated v1.0.0 tag object: `6319d40dd7f6ca61d59e2604f4a3a029b08f14db`
+- Tag peeled target: `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`
+- Release workflow: `33180641938 — completed / success`
+- Fresh evidence: `translategemma-27b-v100-evidence-20260828T125147Z.zip`
+- Fresh evidence SHA256: `9b6e1d717e4f5daab84c4ce112bbfff29fdec13fd9fcf8c2aa9138794d308ce9`
 
-## Model và memory
+## Runtime facts (lần chạy acceptance cuối cùng)
 
-- Strict model weights: 1247/1247.
-- Logical parameter size: 51.884850 GiB.
-- Sharded parameter bytes: 95.05234%; unknown sharding bytes: 0%.
-- Peak cgroup memory: 206.049 GiB.
-- Memory guard: 300 GiB; measured headroom: 93.951 GiB.
+- TPU devices: 8.
+- Logical model workers: 1.
+- Mesh: `[1,8]`.
+- Dtype: BF16 / bfloat16.
+- Generation: split prefill/decode compile.
+- Strict weights: 1247/1247.
+- Jobs: 6 completed / 0 failed.
+- Worker restarts: 0.
+- Peak cgroup memory: 206.012 GiB.
+- Memory guard: 300 GiB.
+- Text semantic acceptance: PASS.
+- Vision semantic acceptance: PASS.
+- Vision tensor path: `[1,2,896,896,3]`.
+- HOT cache reuse: true.
 
-## Text acceptance
+## Text acceptance (lần chạy cuối cùng)
 
-- PRIME client time: 496.534 s; inference: 494.610 s; TTFT: 493.744 s.
-- PRIME compile: prefill 316.407 s + decode 177.338 s; cache reuse false.
-- HOT-1 client time: 0.207547 s; TTFT 0.035955 s; 67.81 tokens/s; cache reuse true.
-- HOT-2 client time: 0.207038 s; TTFT 0.034631 s; 69.02 tokens/s; cache reuse true.
+- PRIME client time: 910.902414 s.
+- HOT-1 client time: 0.208106 s; TTFT: 36.2 ms; throughput ≈ 68.41 tok/s.
+- HOT-2 client time: 0.206174 s; TTFT: 34.9 ms; throughput ≈ 69.22 tok/s.
 - Semantic result: PASS.
 
-## Vision acceptance
+## Vision acceptance (lần chạy cuối cùng)
 
-- PRIME client time: 364.415 s; inference: 362.979 s; TTFT: 361.673 s.
-- PRIME compile: prefill 183.918 s + decode 177.755 s; cache reuse false.
-- HOT-1 client time: 0.581767 s; TTFT 0.140516 s; 70.95 tokens/s; cache reuse true.
-- HOT-2 client time: 0.579858 s; TTFT 0.140904 s; 71.19 tokens/s; cache reuse true.
+- PRIME client time: 702.710737 s.
+- HOT-1 client time: 0.579547 s; TTFT: 140.4 ms; throughput ≈ 72.50 tok/s.
+- HOT-2 client time: 0.579338 s; TTFT: 139.7 ms; throughput ≈ 72.34 tok/s.
 - Semantic result: PASS.
 
 ## Stability
@@ -46,10 +56,14 @@ Tài liệu này ghi real Kaggle TPU v5e-8 hardening evidence cho final publicat
 
 ## Artifact integrity
 
-Sanitized evidence ZIP external SHA256 khớp, toàn bộ internal SHA256 entries khớp và runtime credential files đã được loại trừ.
+External SHA256 của fresh evidence ZIP sanitized khớp, toàn bộ internal SHA256 entries khớp và runtime credential files đã được loại trừ. Source ZIP công khai, Kaggle notebook công khai và fresh evidence ZIP được kiểm checksum trong GitHub Release assets.
 
-## Single-release overwrite gate
+## Ghi chú về PRIME latency
 
-Final publication chỉ giữ `v1.0.0`. Annotated remote tag hiện có phải giữ nguyên cho tới khi một Kaggle notebook mới import trực tiếp từ amended GitHub `main` PASS **Restart Session → Run All** và tạo fresh sanitized evidence.
+Giá trị PRIME client time chậm là do first-shape JAX/XLA compilation như dự kiến, không phải lỗi. Các lần gọi HOT-1 và HOT-2 chứng minh executable-cache reuse và steady-state latency sau lần compilation đầu tiên.
 
-Sau PASS đó, tag chỉ được chuyển sang final `main` với exact `--force-with-lease` guard dựa trên remote tag object SHA đã ghi nhận trước đó, rồi GitHub Release `v1.0.0` hiện có và assets được refresh tại chỗ.
+## Provenance boundary
+
+Annotated tag `v1.0.0` công khai đã được public và xác minh độc lập. Tag được ghim chặt vào đúng runtime commit đã Kaggle-validated `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Việc bảo trì chỉ tài liệu sau này trên `main` không làm thay đổi runtime implementation hoặc release assets của `v1.0.0` đã validation.
+
+Runtime validation `v1.0.0` áp dụng chính xác cho commit `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Bất kỳ commit `main` nào sau này do post-release closure tạo ra chỉ là documentation/metadata và không được diễn giải như một mục tiêu runtime validation mới.

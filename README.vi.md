@@ -2,6 +2,10 @@
 
 > 🌐 Language / Ngôn ngữ: [English](README.md) | **Tiếng Việt**
 
+[![CI](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision)](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/releases/tag/v1.0.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Chạy **TranslateGemma 27B IT** dưới dạng REST service có xác thực cho text và vision trên Kaggle **TPU v5e-8 / `v5litepod-8`** bằng **Keras 3, KerasHub và JAX**.
 
 Project dùng một logical model trong một TPU worker được spawn riêng, shard trên toàn bộ **8 TPU devices** bằng Keras ModelParallel mesh `[1,8]`. Flask application được phục vụ bởi một Waitress coordinator process phía CPU, phụ trách HTTP, authentication, queue, async result polling, request ID, health check, structured logging và worker supervision; JAX/Keras chỉ ở TPU worker.
@@ -23,7 +27,20 @@ strict model weights    1247/1247
 text translation        PASS
 multipart vision        PASS
 final jobs              6 completed / 0 failed
+peak cgroup memory      206.012 GiB
 ```
+
+Provenance:
+
+```text
+Validated v1.0.0 runtime commit: df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de
+Fresh Kaggle acceptance: PASS
+Public release assets: checksummed and verified
+```
+
+Xem [docs/RELEASE-EVIDENCE-v1.0.0.vi.md](docs/RELEASE-EVIDENCE-v1.0.0.vi.md) cho final release evidence record và [v1.0.0 GitHub Release](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/releases/tag/v1.0.0) cho các asset công khai đã checksum.
+
+Runtime v1.0.0 được ghim vào commit `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Các thay đổi sau release trên `main`, nếu có, chỉ là documentation/metadata trừ khi được nói rõ khác đi.
 
 Public release hiện tại giữ nguyên TPU inference core đã proven. Phần bootstrap Kaggle cũng giữ nguyên JAX/JAXLIB đang có và chỉ cài bản đã proven `libtpu==0.0.17` khi `libtpu` hoàn toàn bị thiếu.
 

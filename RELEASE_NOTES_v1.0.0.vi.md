@@ -8,21 +8,30 @@
 
 Final public snapshot kết hợp runtime TPU 8 thiết bị đã validation, REST API có authentication, async job workflow, PRIME/HOT semantic acceptance, sanitized evidence collection, tài liệu song ngữ và Kaggle notebook ưu tiên import từ GitHub mà không thay đổi TPU inference core đã khóa.
 
+## Danh tính release đã validation
+
+- Validated release commit: `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`
+- Annotated v1.0.0 tag object: `6319d40dd7f6ca61d59e2604f4a3a029b08f14db`
+- Release workflow: `33180641938 — completed / success`
+- Fresh evidence: `translategemma-27b-v100-evidence-20260828T125147Z.zip`
+- Xem [docs/RELEASE-EVIDENCE-v1.0.0.vi.md](docs/RELEASE-EVIDENCE-v1.0.0.vi.md) cho final release evidence record.
+
 ## Runtime contract đã validation
 
 - TranslateGemma 27B IT trên đúng 8 TPU devices với một logical worker.
 - Keras ModelParallel mesh `[1,8]`, BF16 inference, split-compile generation và strict weight loading 1247/1247.
 - Logical parameter size 51.884850 GiB; 95.05234% parameter bytes được shard; unknown sharding bytes 0%.
-- Peak cgroup memory 206.049 GiB, còn 93.951 GiB dưới memory guard 300 GiB.
+- Peak cgroup memory 206.012 GiB, còn 93.988 GiB dưới memory guard 300 GiB.
 - Sáu acceptance jobs hoàn tất, không có failed job và không có automatic worker restart.
+- Vision tensor path `[1,2,896,896,3]` đã validation.
 
 ## PRIME và HOT acceptance
 
-Text PRIME mất 496.534 giây client-side trong khi prefill/decode compilation tạo executable caches. Text HOT-1 và HOT-2 hoàn tất khoảng 0.207 giây client-side với cache reuse, TTFT khoảng 35 ms và khoảng 68–69 generated tokens/second.
+Text PRIME mất 910.902414 giây client-side trong khi first-shape prefill/decode JAX/XLA compilation tạo executable caches. Text HOT-1 và HOT-2 sau đó hoàn tất khoảng 0.208 và 0.206 giây client-side với cache reuse, TTFT khoảng 34.9–36.2 ms và khoảng 68.4–69.2 generated tokens/second.
 
-Vision PRIME mất 364.415 giây client-side. Vision HOT-1 và HOT-2 hoàn tất khoảng 0.58 giây với cache reuse, TTFT khoảng 141 ms và khoảng 71 generated tokens/second.
+Vision PRIME mất 702.710737 giây client-side. Vision HOT-1 và HOT-2 hoàn tất khoảng 0.5796 và 0.5793 giây với cache reuse, TTFT khoảng 139.7–140.4 ms và khoảng 72.3–72.5 generated tokens/second.
 
-Semantic validation PASS cho mọi kết quả PRIME/HOT text và vision. Evidence xác nhận first-shape JAX/XLA compilation, không phải warm decode runtime, là thành phần chi phối initial latency.
+Semantic validation PASS cho mọi kết quả PRIME/HOT text và vision. PRIME chậm là do first-shape JAX/XLA compilation như dự kiến, không phải lỗi; các lần gọi HOT chứng minh executable-cache reuse và steady-state latency.
 
 ## Hardening evidence và notebook
 
@@ -34,11 +43,7 @@ Semantic validation PASS cho mọi kết quả PRIME/HOT text và vision. Eviden
 
 ## Chính sách single-release publication
 
-Publication cycle này chủ ý chỉ public `v1.0.0`. Tag/release material `v1.0.0` trước đó là material validation trước publication và được refresh tại chỗ thay vì tạo version mới.
-
-Sau khi final `main` được amend và một Kaggle notebook mới import từ GitHub PASS **Restart Session → Run All**, annotated tag `v1.0.0` hiện có được chuyển sang final commit bằng lease-protected force update. Thao tác fail-closed nếu remote tag đã thay đổi sau khi expected old tag object SHA được ghi nhận.
-
-GitHub Release `v1.0.0` hiện có sau đó được edit tại chỗ và toàn bộ source/notebook assets được upload bằng `--clobber`. Publication cycle này không có successor release.
+Publication cycle này chủ ý chỉ public `v1.0.0`. Annotated tag công khai đã được public và xác minh độc lập; tag được ghim chặt vào đúng runtime commit đã Kaggle-validated `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Publication cycle này không có successor release và các thay đổi chỉ tài liệu sau này trên `main` không làm thay đổi runtime hoặc release assets đã validation.
 
 ## Integrity của TPU engine đã khóa
 

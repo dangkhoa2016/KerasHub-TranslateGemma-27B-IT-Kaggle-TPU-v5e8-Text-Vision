@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the v1.0.0 release."
+title: "KerasHub TranslateGemma 27B IT on Kaggle TPU v5e-8 — Text + Vision REST Server"
+type: software
+authors:
+  - family-names: "Đăng"
+    given-names: "Khoa"
+    email: "i.am@dangkhoa.dev"
+repository-code: "https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision"
+url: "https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/releases/tag/v1.0.0"
+version: "1.0.0"
+date-released: "2026-08-28"
+license: MIT
+keywords:
+  - TranslateGemma
+  - KerasHub
+  - JAX
+  - Kaggle
+  - TPU
+  - machine translation
+  - multimodal
+  - vision-language model

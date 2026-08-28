@@ -4,37 +4,47 @@
 
 ## Scope
 
-This document records the real Kaggle TPU v5e-8 hardening evidence for the final `v1.0.0` publication candidate before the last GitHub-only publication gate.
+This document is the immutable final release evidence record for the public `v1.0.0` release of the TranslateGemma 27B IT text + vision REST server for Kaggle TPU v5e-8. It supersedes all candidate/pre-publication evidence documents.
 
-## Source and tests
+## Validated release identity
 
-- Base commit before final integration: `1be6d5867ce3686103ef234cf99244b34a6be55d`.
-- Hardening TDD RED and GREEN phases passed.
-- Full validated Kaggle suite: 149/149 tests passed before release/tag overwrite hardening was added.
-- Runtime: TranslateGemma 27B IT, JAX, BF16, TPU v5e-8, 8 devices, mesh `[1,8]`.
+- Validated release commit: `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`
+- Validated release tree: `56320fdd6cede00589c363912513190ed3d4be08`
+- Annotated v1.0.0 tag object: `6319d40dd7f6ca61d59e2604f4a3a029b08f14db`
+- Tag peeled target: `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`
+- Release workflow: `33180641938 — completed / success`
+- Fresh evidence: `translategemma-27b-v100-evidence-20260828T125147Z.zip`
+- Fresh evidence SHA256: `9b6e1d717e4f5daab84c4ce112bbfff29fdec13fd9fcf8c2aa9138794d308ce9`
 
-## Model and memory
+## Runtime facts (final acceptance run)
 
-- Strict model weights: 1247/1247.
-- Logical parameter size: 51.884850 GiB.
-- Sharded parameter bytes: 95.05234%; unknown sharding bytes: 0%.
-- Peak cgroup memory: 206.049 GiB.
-- Memory guard: 300 GiB; measured headroom: 93.951 GiB.
+- TPU devices: 8.
+- Logical model workers: 1.
+- Mesh: `[1,8]`.
+- Dtype: BF16 / bfloat16.
+- Generation: split prefill/decode compile.
+- Strict weights: 1247/1247.
+- Jobs: 6 completed / 0 failed.
+- Worker restarts: 0.
+- Peak cgroup memory: 206.012 GiB.
+- Memory guard: 300 GiB.
+- Text semantic acceptance: PASS.
+- Vision semantic acceptance: PASS.
+- Vision tensor path: `[1,2,896,896,3]`.
+- HOT cache reuse: true.
 
-## Text acceptance
+## Text acceptance (final run)
 
-- PRIME client time: 496.534 s; inference: 494.610 s; TTFT: 493.744 s.
-- PRIME compile: prefill 316.407 s + decode 177.338 s; cache reuse false.
-- HOT-1 client time: 0.207547 s; TTFT 0.035955 s; 67.81 tokens/s; cache reuse true.
-- HOT-2 client time: 0.207038 s; TTFT 0.034631 s; 69.02 tokens/s; cache reuse true.
+- PRIME client time: 910.902414 s.
+- HOT-1 client time: 0.208106 s; TTFT: 36.2 ms; throughput ≈ 68.41 tok/s.
+- HOT-2 client time: 0.206174 s; TTFT: 34.9 ms; throughput ≈ 69.22 tok/s.
 - Semantic result: PASS.
 
-## Vision acceptance
+## Vision acceptance (final run)
 
-- PRIME client time: 364.415 s; inference: 362.979 s; TTFT: 361.673 s.
-- PRIME compile: prefill 183.918 s + decode 177.755 s; cache reuse false.
-- HOT-1 client time: 0.581767 s; TTFT 0.140516 s; 70.95 tokens/s; cache reuse true.
-- HOT-2 client time: 0.579858 s; TTFT 0.140904 s; 71.19 tokens/s; cache reuse true.
+- PRIME client time: 702.710737 s.
+- HOT-1 client time: 0.579547 s; TTFT: 140.4 ms; throughput ≈ 72.50 tok/s.
+- HOT-2 client time: 0.579338 s; TTFT: 139.7 ms; throughput ≈ 72.34 tok/s.
 - Semantic result: PASS.
 
 ## Stability
@@ -46,10 +56,14 @@ This document records the real Kaggle TPU v5e-8 hardening evidence for the final
 
 ## Artifact integrity
 
-The sanitized evidence ZIP external SHA256 matched, all internal SHA256 entries matched, and runtime credential files were excluded.
+The sanitized fresh evidence ZIP external SHA256 matched, all internal SHA256 entries matched, and runtime credential files were excluded. The public source ZIP, the public Kaggle notebook, and the fresh evidence ZIP are checksummed in the GitHub Release assets.
 
-## Single-release overwrite gate
+## Notes on PRIME latency
 
-The final publication keeps only `v1.0.0`. The existing annotated remote tag must remain untouched until a new Kaggle notebook imported directly from the amended GitHub `main` passes **Restart Session → Run All** and produces fresh sanitized evidence.
+The slow PRIME client times are expected first-shape JAX/XLA compilation and are not a failure. The HOT-1 and HOT-2 calls demonstrate executable-cache reuse and steady-state latency after the initial compilation.
 
-After that PASS, the tag may be moved to final `main` only with an exact `--force-with-lease` guard against the previously recorded remote tag object SHA, then the existing GitHub Release `v1.0.0` and its assets are refreshed in place.
+## Provenance boundary
+
+The public `v1.0.0` annotated tag has been published and independently verified. It remains pinned to the exact Kaggle-validated runtime commit `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Later documentation-only maintenance on `main` does not alter the validated `v1.0.0` runtime implementation or release assets.
+
+`v1.0.0` runtime validation applies exactly to commit `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Any later `main` commit created by the post-release closure is documentation/metadata only and must not be interpreted as a new runtime validation target.

@@ -2,6 +2,10 @@
 
 > 🌐 Language / Ngôn ngữ: **English** | [Tiếng Việt](README.vi.md)
 
+[![CI](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision)](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/releases/tag/v1.0.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Run **TranslateGemma 27B IT** as an authenticated text-and-vision REST service on a Kaggle **TPU v5e-8 / `v5litepod-8`** session using **Keras 3, KerasHub, and JAX**.
 
 The project uses one logical model in one spawned TPU worker, sharded across all **8 TPU devices** with a Keras ModelParallel mesh `[1,8]`. A Flask application served by one Waitress coordinator process remains CPU-side and handles HTTP, authentication, queuing, asynchronous result polling, request IDs, health checks, structured logging, and worker supervision; JAX/Keras stay inside the TPU worker.
@@ -23,7 +27,20 @@ strict model weights    1247/1247
 text translation        PASS
 multipart vision        PASS
 final jobs              6 completed / 0 failed
+peak cgroup memory      206.012 GiB
 ```
+
+Provenance:
+
+```text
+Validated v1.0.0 runtime commit: df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de
+Fresh Kaggle acceptance: PASS
+Public release assets: checksummed and verified
+```
+
+See [docs/RELEASE-EVIDENCE-v1.0.0.md](docs/RELEASE-EVIDENCE-v1.0.0.md) for the final release evidence record and the [v1.0.0 GitHub Release](https://github.com/dangkhoa2016/KerasHub-TranslateGemma-27B-IT-Kaggle-TPU-v5e8-Text-Vision/releases/tag/v1.0.0) for the checksummed public assets.
+
+The v1.0.0 runtime is pinned to commit `df13a7f6b304c8cdeafa5c15e2d1f75fc73d36de`. Later post-release changes on `main`, if present, are documentation/metadata only unless explicitly stated otherwise.
 
 The current public release keeps the proven TPU inference core unchanged. The Kaggle bootstrap also preserves the existing JAX/JAXLIB stack and only installs the proven `libtpu==0.0.17` when `libtpu` is completely absent.
 
