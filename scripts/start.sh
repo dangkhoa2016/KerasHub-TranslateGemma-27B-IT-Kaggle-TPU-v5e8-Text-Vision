@@ -2,6 +2,21 @@
 set -Eeuo pipefail
 source "$(dirname "$0")/_common.sh"
 load_env
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+
+model_preferred="${MODEL_PATH:-${MODEL_BASE:-/kaggle/input/models/keras/translategemma/keras/translategemma_27b_it}}"
+resolver_args=(
+  --preferred "$model_preferred"
+  --input-root "${KAGGLE_INPUT_ROOT:-/kaggle/input}"
+  --preset-name translategemma_27b_it
+)
+if [[ -n "${MODEL_PATH:-}" ]]; then
+  resolver_args+=(--strict-preferred)
+fi
+MODEL_PATH="$(python3 scripts/resolve_kaggle_model_path.py "${resolver_args[@]}")"
+export MODEL_PATH="$MODEL_PATH"
+echo "[model-resolver] resolved attached preset: $MODEL_PATH"
+
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/configure_kaggle_tpu.sh"
 pid_file="$ROOT_DIR/state/server.pid"
@@ -14,7 +29,6 @@ if worker_pid="$(read_managed_pid "$worker_pid_file" "multiprocessing.spawn" 2>/
   echo "Refusing to start: managed TPU worker PID $worker_pid is still alive. Run scripts/stop.sh first." >&2
   exit 1
 fi
-export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 archive_dir="$ROOT_DIR/log/archive"
 mkdir -p "$archive_dir"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
